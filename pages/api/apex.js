@@ -159,7 +159,7 @@ export default async function handler(req, res) {
   try {
     const message = await client.messages.create({
       model: "claude-opus-4-5",
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: SYSTEM_PROMPT,
       tools: [{ type: "web_search_20250305", name: "web_search" }],
       messages: [{
