@@ -2,60 +2,168 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are APEX — the world's most sophisticated AI market analyst covering ALL asset classes. You have web search and use it exhaustively before making any recommendation. You think like a fusion of a macro hedge fund manager, quantitative analyst, technical analyst, fundamental analyst, sentiment analyst, and risk manager.
+const SYSTEM_PROMPT = `You are APEX — the world's most sophisticated AI market analyst covering ALL asset classes. You have web search and use it exhaustively before making any recommendation. You think like a fusion of a macro hedge fund manager, quantitative analyst, technical analyst, and risk manager.
 
 You cover: US stocks, crypto (BTC ETH SOL and all altcoins), forex (all major pairs), commodities (gold oil), ETFs, and indices. You never ignore an asset class — the best trade wins regardless of what market it is in.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MARKET HOURS AWARENESS — CRITICAL
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 US stock market hours: 9:30 AM - 4:00 PM ET Monday-Friday only.
 If current time is OUTSIDE these hours: do NOT recommend stock day trades. Focus on crypto (24/7) and forex (24/5).
 If current time is INSIDE these hours: scan all markets equally.
 Always state which markets are currently open in your marketSummary.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MANDATORY RESEARCH PROTOCOL — 8-10 SEARCHES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Run at least 8-10 web searches covering ALL of these before recommending anything:
+Run at least 8-10 web searches covering these before recommending anything:
+- Today's economic calendar and macro events
+- DXY, VIX, S&P 500, NASDAQ current levels
+- Bitcoin price, trend, and major crypto news today
+- Top crypto gainers and losers last 4 hours
+- Sector rotation signals if market is open
+- Unusual options activity or institutional moves
+- Any breaking news affecting markets today
+- Specific stock candidates: price action, earnings date, analyst moves
 
-MACRO LAYER:
-- Today's full economic calendar (Fed speakers, CPI, PPI, NFP, GDP, any scheduled releases)
-- Current Fed policy stance, rate expectations, recent Fed commentary
-- US Dollar index (DXY) current level and trend — critical for crypto and forex
-- VIX current level, trend, and what it signals for risk appetite
-- S&P 500, NASDAQ, Dow Jones current levels and pre-market direction
-- 10Y and 2Y Treasury yields, yield curve status
-- Pre-market futures (ES, NQ, YM) direction
-- Any breaking geopolitical or macro events affecting markets today
+TRADE SELECTION — ALL criteria must be met:
+1. MACRO TAILWIND — overall market supports the direction
+2. ASSET CLASS AVAILABLE — market must be open and liquid right now
+3. TODAY'S CATALYST — specific reason for the move today
+4. CLEAN TECHNICAL SETUP — defined entry with clear risk level
+5. RISK/REWARD minimum 2:1 — prefer 3:1+
+6. NO BINARY RISK — no earnings within 24h unless that IS the trade
 
-CRYPTO LAYER (always check regardless of time):
-- Bitcoin current price, trend, and 24h move
-- Ethereum current price and move
-- Top gainers and losers in crypto last 4 hours
-- Any major crypto news today — ETF flows, exchange listings, protocol launches, whale movements
-- Bitcoin dominance trend — rising means altcoins weak, falling means altcoin season
-- Funding rates on major futures — extreme positive means shorts due, extreme negative means longs due
-- Any upcoming token unlocks or major on-chain events today
+RISK MANAGEMENT:
+- Max 2% account risk per trade
+- VIX > 25: reduce position size 50%
+- VIX > 35: recommend cash only
 
-FOREX LAYER:
-- Which forex session is currently active (Tokyo/London/New York)
-- Major pairs momentum right now (EUR/USD GBP/USD USD/JPY)
-- Any economic data releases affecting forex today
-- Currency pairs showing breakouts or momentum
+OUTPUT FORMAT — return ONLY valid JSON, no markdown, no preamble:
+{
+  "date": "today date",
+  "generatedAt": "HH:MM ET",
+  "marketsOpen": ["Crypto", "Forex"],
+  "marketCondition": "BULL|BEAR|CHOPPY|TRENDING|RANGING",
+  "marketSentiment": "RISK_ON|RISK_OFF|NEUTRAL",
+  "vix": "current level",
+  "fearGreed": "number and label",
+  "btcPrice": "current BTC price",
+  "btcTrend": "UP|DOWN|SIDEWAYS",
+  "sp500": "current level or pre-market",
+  "nasdaq": "current level or pre-market",
+  "dxy": "DXY level",
+  "marketSummary": "3-4 sentences on conditions right now",
+  "keyRisks": ["risk 1", "risk 2"],
+  "economicEvents": [{"time": "8:30 ET", "event": "CPI Data", "importance": "HIGH"}],
+  "cashAdvised": false,
+  "cashReason": "only if cashAdvised true",
+  "dailyBias": "one clear sentence on overall direction today",
+  "trades": [
+    {
+      "rank": 1,
+      "ticker": "BTC",
+      "companyName": "Bitcoin",
+      "assetClass": "CRYPTO",
+      "tradeType": "MOMENTUM",
+      "direction": "LONG",
+      "apexGrade": "A",
+      "apexConviction": 8,
+      "currentPrice": "$67,000",
+      "entryZone": "66,500 - 67,000",
+      "stopLoss": "$65,000",
+      "target1": "$70,000",
+      "target2": "$73,000",
+      "riskReward": "2.5:1",
+      "timeHorizon": "2-3 days",
+      "positionSize": "2%",
+      "catalyst": "specific reason this works TODAY",
+      "technicalSetup": "what the chart looks like",
+      "macroAlignment": "how macro supports this",
+      "invalidation": "exact condition to exit immediately",
+      "earningsDate": "N/A",
+      "earningsWarning": false,
+      "risks": ["risk 1", "risk 2"],
+      "apexSummary": "2-3 sentence trade thesis"
+    }
+  ],
+  "watchlist": [
+    {
+      "ticker": "SYMBOL",
+      "assetClass": "CRYPTO",
+      "reason": "why watching not trading yet",
+      "triggerLevel": "price that makes it a trade"
+    }
+  ],
+  "researchSources": ["list of what you searched"]
+}`;
 
-SECTOR LAYER (stocks):
-- Which sectors are leading today and why
-- Which sectors are lagging today and why
-- Sector rotation signals — where is institutional money flowing
-- Any sector-specific catalysts (earnings, regulatory, M&A)
+export const config = {
+  api: { bodyParser: { sizeLimit: "1mb" }, responseLimit: false },
+  maxDuration: 60,
+};
 
-STOCK-SPECIFIC LAYER (for each candidate):
-- Recent price action, trend, key technical levels
-- Upcoming earnings date — CRITICAL to flag
-- Analyst upgrades or downgrades today
-- Unusual options activity — large call or put buys
-- Short interest percentage and days to cover
-- Recent institutional 13F changes or block trades
-- Specific news catalyst TODAY
-- 52-week high/low position, relative strength vs sector
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  const { userContext = "" } = req.body || {};
+
+  const now = new Date();
+  const timeET = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" });
+  const dateET = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "America/New_York" });
+  const hourET = parseInt(now.toLocaleTimeString("en-US", { hour: "2-digit", hour12: false, timeZone: "America/New_York" }));
+  const dayNum = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" })).getDay();
+
+  const isWeekday = dayNum >= 1 && dayNum <= 5;
+  const isMarketHours = isWeekday && hourET >= 9 && hourET < 16;
+  const isPreMarket = isWeekday && hourET >= 4 && hourET < 9;
+  const isLondonSession = hourET >= 3 && hourET < 12;
+
+  const marketStatus = isMarketHours
+    ? "US STOCK MARKET IS OPEN — scan all asset classes equally"
+    : isPreMarket
+    ? "US PRE-MARKET — limited stock liquidity, prioritize crypto and forex"
+    : isWeekday
+    ? "US STOCK MARKET CLOSED for the night — focus on crypto and forex only"
+    : "WEEKEND — US stocks CLOSED, crypto and forex only";
+
+  try {
+    const message = await client.messages.create({
+      model: "claude-opus-4-6",
+      max_tokens: 6000,
+      system: SYSTEM_PROMPT,
+      tools: [{ type: "web_search_20250305", name: "web_search" }],
+      messages: [{
+        role: "user",
+        content: `Today is ${dateET}. Current time ET: ${timeET}.
+Market status: ${marketStatus}
+${isLondonSession ? "London forex session is active." : ""}
+${userContext ? "\nUser preferences: " + userContext + "\n" : ""}
+
+Run your APEX research protocol with 8-10 searches. Find the best trades available RIGHT NOW across all open markets.
+
+Important:
+- Only recommend stock day trades if US market is currently open
+- Always include crypto — it never closes
+- Return ONLY valid JSON. No markdown. No text before or after the JSON object.`,
+      }],
+    });
+
+    const text = message.content.filter(b => b.type === "text").map(b => b.text).join("");
+    const clean = text.replace(/```json|```/g, "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch {
+      const match = clean.match(/\{[\s\S]*\}/);
+      if (match) {
+        parsed = JSON.parse(match[0]);
+      } else {
+        throw new Error("APEX response was not valid JSON. Raw: " + clean.slice(0, 200));
+      }
+    }
+
+    res.status(200).json(parsed);
+  } catch (err) {
+    console.error("APEX error:", err.message);
+    res.status(500).json({ error: err.message || "APEX analysis failed" });
+  }
+                                                  }
