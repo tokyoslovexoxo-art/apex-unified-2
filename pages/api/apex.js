@@ -115,7 +115,7 @@ export const config = {
       messages: [{ role: "user", content: `Today is ${dateET}. Current time ET: ${timeET}. ${marketStatus}. ${userContext ? "User preferences: " + userContext : ""} Run 8-10 searches. Return ONLY valid JSON, no markdown, no text outside the JSON.` }],
     });
     const text = message.content.filter(b => b.type === "text").map(b => b.text).join("");
-    const clean = text.replace(/```json|```/g, "").trim();
+        const clean = text.replace(/```json|```/g, "").replace(/[\u0000-\u001F\u007F]/g, " ").trim();
     let parsed;
     try { parsed = JSON.parse(clean); }
     catch { const m = clean.match(/\{[\s\S]*\}/); if (m) { parsed = JSON.parse(m[0]); } else { throw new Error("Not valid JSON"); } }
