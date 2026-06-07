@@ -115,11 +115,14 @@ export const config = {
       messages: [{ role: "user", content: `Today is ${dateET}. Current time ET: ${timeET}. ${marketStatus}. ${userContext ? "User preferences: " + userContext : ""} Run 8-10 searches. Return ONLY valid JSON, no markdown, no text outside the JSON.` }],
     });
     const text = message.content.filter(b => b.type === "text").map(b => b.text).join("");
-        const clean = text.replace(/```json|```/g, "").replace(/[\u0000-\u001F\u007F]/g, " ").trim();
-    let parsed;
-    try { parsed = JSON.parse(clean); }
-    catch { const m = clean.match(/\{[\s\S]*\}/); if (m) { parsed = JSON.parse(m[0]); } else { throw new Error("Not valid JSON"); } }
-    res.status(200).json(parsed);
+            const raw = text.replace(/```json|```/g, "").trim();
+        const start = raw.indexOf("{");
+        const end = raw.lastIndexOf("}");
+        if (start === -1 || end === -1) throw new Error("No JSON object found");
+        const jsonStr = raw.slice(start, end + 1).replace(/[\r\n\t]/g, " ").replace(/[\u0000-\u001F\u007F]/g, " ");
+        let parsed;
+        try { parsed = JSON.parse(jsonStr); }
+        catch { parsed = JSON.parse(jsonStr.replace(/,\s*([}\]])/g, "$1")); }
   } catch (err) {
     console.error("APEX error:", err.message);
     res.status(500).json({ error: err.message || "APEX analysis failed" });
