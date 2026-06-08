@@ -12,12 +12,12 @@ If current time is OUTSIDE these hours: do NOT recommend stock day trades. Focus
 If current time is INSIDE these hours: scan all markets equally.
 Always state which markets are currently open in your marketSummary.
 
-MANDATORY RESEARCH PROTOCOL — 8-10 SEARCHES
-Run at least 8-10 web searches covering these before recommending anything:
+MANDATORY RESEARCH PROTOCOL — 3-4 FOCUSED SEARCHES (HARD LIMIT OF 4)
+Do EXACTLY 3-4 efficient searches (never more than 4) covering the essentials below, then stop and write your analysis:
 - Today's economic calendar and macro events
 - DXY, VIX, S&P 500, NASDAQ current levels
 - Bitcoin price, trend, and major crypto news today
-- Top crypto gainers and losers last 4 hours- Sector rotation signals if market is open
+- Top crypto gainers and losers last 4 hours
 - Unusual options activity or institutional moves
 - Any breaking news affecting markets today
 - Specific stock candidates: price action, earnings date, analyst moves
