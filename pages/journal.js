@@ -1,0 +1,163 @@
+import { useState, useEffect, useCallback } from "react";
+import Head from "next/head";
+
+const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SB_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const TABLE = "journal_trades";
+
+function sbHeaders() {
+  return { "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json" };
+}
+
+function num(v) { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; }
+
+export default function Journal() {
+  const [trades, setTrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState("");
+  const [form, setForm] = useState({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "" });
+  const configured = Boolean(SB_URL && SB_KEY);
+
+  const loadTrades = useCallback(async () => {
+    if (!configured) { setLoading(false); return; }
+    try {
+      const r = await fetch(SB_URL + "/rest/v1/" + TABLE + "?select=*&order=logged_at.desc", { headers: sbHeaders() });
+      const data = await r.json();
+      setTrades(Array.isArray(data) ? data : []);
+    } catch (e) { setMsg("Could not load trades: " + e.message); }
+    setLoading(false);
+  }, [configured]);
+
+  useEffect(() => { loadTrades(); }, [loadTrades]);
+
+  const refreshPrices = useCallback(async () => {
+    const open = trades.filter(t => t.status === "OPEN");
+    if (open.length === 0) { setMsg("No open trades to check."); return; }
+    setMsg("Checking live prices...");
+    const tickers = [...new Set(open.map(t => t.ticker))].join(",");
+    try {
+      const r = await fetch("/api/price?tickers=" + encodeURIComponent(tickers));
+      const { prices } = await r.json();
+      let updated = 0;
+      for (const t of open) {
+        const price = prices[t.ticker];
+        if (typeof price !== "number") continue;
+        const entry = num(t.entry); const stop = num(t.stop_loss); const tgt = num(t.target1);
+        if (entry == null) continue;
+        let status = "OPEN"; let resultPct = null;
+        const isLong = (t.direction || "LONG").toUpperCase() === "LONG";
+        if (isLong) {
+          if (tgt != null && price >= tgt) { status = "WIN"; resultPct = ((tgt - entry) / entry) * 100; }
+          else if (stop != null && price <= stop) { status = "LOSS"; resultPct = ((stop - entry) / entry) * 100; }
+        } else {
+          if (tgt != null && price <= tgt) { status = "WIN"; resultPct = ((entry - tgt) / entry) * 100; }
+          else if (stop != null && price >= stop) { status = "LOSS"; resultPct = ((entry - stop) / entry) * 100; }
+        }
+        if (status !== "OPEN") {
+          await fetch(SB_URL + "/rest/v1/" + TABLE + "?id=eq." + t.id, { method: "PATCH", headers: sbHeaders(), body: JSON.stringify({ status, result_pct: resultPct, closed_at: new Date().toISOString() }) });
+          updated++;
+        }
+      }
+      setMsg(updated > 0 ? ("Updated " + updated + " trade(s).") : "All open trades still running.");
+      loadTrades();
+    } catch (e) { setMsg("Price check failed: " + e.message); }
+  }, [trades, loadTrades]);
+
+  const addTrade = async () => {
+    if (!form.ticker || !form.entry) { setMsg("Need at least a ticker and entry price."); return; }
+    const row = {
+      id: "t_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+      ticker: form.ticker.toUpperCase().trim(),
+      asset_class: "CRYPTO",
+      direction: form.direction,
+      entry: num(form.entry),
+      stop_loss: num(form.stopLoss),
+      target1: num(form.target1),
+      target2: num(form.target2),
+      conviction: form.conviction ? parseInt(form.conviction) : null,
+      status: "OPEN"
+    };
+    try {
+      const r = await fetch(SB_URL + "/rest/v1/" + TABLE, { method: "POST", headers: { ...sbHeaders(), "Prefer": "return=representation" }, body: JSON.stringify(row) });
+      if (!r.ok) throw new Error("status " + r.status);
+      setForm({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "" });
+      setMsg("Trade logged.");
+      loadTrades();
+    } catch (e) { setMsg("Could not save: " + e.message); }
+  };
+
+  const deleteTrade = async (id) => {
+    try {
+      await fetch(SB_URL + "/rest/v1/" + TABLE + "?id=eq." + id, { method: "DELETE", headers: sbHeaders() });
+      loadTrades();
+    } catch (e) { setMsg("Delete failed: " + e.message); }
+  };
+
+  const closed = trades.filter(t => t.status === "WIN" || t.status === "LOSS");
+  const wins = closed.filter(t => t.status === "WIN").length;
+  const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
+  const totalPnl = closed.reduce((s, t) => s + (num(t.result_pct) || 0), 0);
+
+  const C = { bg: "#03070a", card: "#0a1520", border: "rgba(0,255,136,0.15)", green: "#00ff88", red: "#ff3355", text: "#c8d8e8", dim: "#4a6a7a" };
+  const box = { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: 16 };
+  const inp = { background: "#060d12", border: "1px solid " + C.border, borderRadius: 6, padding: "8px 10px", color: "#fff", fontSize: 13, width: "100%", boxSizing: "border-box" };
+
+  return (
+    <>
+      <Head><title>APEX Journal</title></Head>
+      <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "DM Sans, sans-serif", padding: "24px 16px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div style={{ fontSize: 30, fontWeight: 900, color: C.green, letterSpacing: 3 }}>APEX JOURNAL</div>
+            <a href="/" style={{ color: C.dim, fontSize: 13, textDecoration: "none" }}>&larr; Back to APEX</a>
+          </div>
+          <div style={{ color: C.dim, fontSize: 13, marginBottom: 20 }}>Paper-trading tracker. Log a crypto trade, then hit Check Prices to mark wins and losses. Synced to your account across devices.</div>
+          {!configured && <div style={{ ...box, borderColor: C.red, color: C.red, marginBottom: 20 }}>Supabase keys not detected. Make sure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel and redeploy.</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+            <div style={box}><div style={{ color: C.dim, fontSize: 11 }}>WIN RATE</div><div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{winRate}%</div><div style={{ color: C.dim, fontSize: 11 }}>{wins}/{closed.length} closed</div></div>
+            <div style={box}><div style={{ color: C.dim, fontSize: 11 }}>TOTAL P&L</div><div style={{ fontSize: 26, fontWeight: 800, color: totalPnl >= 0 ? C.green : C.red }}>{totalPnl >= 0 ? "+" : ""}{totalPnl.toFixed(1)}%</div><div style={{ color: C.dim, fontSize: 11 }}>sum of closed</div></div>
+            <div style={box}><div style={{ color: C.dim, fontSize: 11 }}>OPEN</div><div style={{ fontSize: 26, fontWeight: 800 }}>{trades.filter(t => t.status === "OPEN").length}</div><div style={{ color: C.dim, fontSize: 11 }}>{trades.length} total</div></div>
+          </div>
+          <div style={{ ...box, marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, marginBottom: 12, color: C.green }}>LOG A TRADE</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 10 }}>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Ticker (e.g. BTC)</div><input style={inp} value={form.ticker} onChange={e => setForm({ ...form, ticker: e.target.value })} /></div>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Direction</div><select style={inp} value={form.direction} onChange={e => setForm({ ...form, direction: e.target.value })}><option>LONG</option><option>SHORT</option></select></div>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Conviction (1-10)</div><input style={inp} value={form.conviction} onChange={e => setForm({ ...form, conviction: e.target.value })} /></div>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Entry price</div><input style={inp} value={form.entry} onChange={e => setForm({ ...form, entry: e.target.value })} /></div>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Stop loss</div><input style={inp} value={form.stopLoss} onChange={e => setForm({ ...form, stopLoss: e.target.value })} /></div>
+              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Target 1</div><input style={inp} value={form.target1} onChange={e => setForm({ ...form, target1: e.target.value })} /></div>
+            </div>
+            <button onClick={addTrade} style={{ background: C.green, color: "#000", border: "none", borderRadius: 6, padding: "10px 18px", fontWeight: 800, cursor: "pointer", letterSpacing: 1 }}>+ LOG TRADE</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <button onClick={refreshPrices} style={{ background: "transparent", color: C.green, border: "1px solid " + C.green, borderRadius: 6, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}>CHECK PRICES</button>
+            {msg && <span style={{ color: C.dim, fontSize: 13 }}>{msg}</span>}
+          </div>
+          <div style={box}>
+            {loading ? <div style={{ color: C.dim }}>Loading...</div> : trades.length === 0 ? <div style={{ color: C.dim }}>No trades logged yet. Add one above.</div> :
+              trades.map(t => {
+                const sc = t.status === "WIN" ? C.green : t.status === "LOSS" ? C.red : C.dim;
+                return (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <div>
+                      <span style={{ fontWeight: 800 }}>{t.ticker}</span>
+                      <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>{t.direction} @ {t.entry}</span>
+                      <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>SL {t.stop_loss} / TP {t.target1}</span>
+                      {t.conviction ? <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>conv {t.conviction}</span> : null}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {t.result_pct != null && <span style={{ color: sc, fontSize: 13 }}>{num(t.result_pct) >= 0 ? "+" : ""}{num(t.result_pct).toFixed(1)}%</span>}
+                      <span style={{ color: sc, fontWeight: 800, fontSize: 13 }}>{t.status}</span>
+                      <span onClick={() => deleteTrade(t.id)} style={{ color: C.dim, cursor: "pointer", fontSize: 16 }}>&times;</span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+          <div style={{ color: C.dim, fontSize: 11, marginTop: 16, lineHeight: 1.5 }}>Paper trading only. Win/loss is based on whether live price crossed your target or stop since logging. Needs dozens of trades over weeks to mean anything. Not financial advice.</div>
+        </div>
+      </div>
+    </>
+  );
+}
