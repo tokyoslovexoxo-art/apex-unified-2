@@ -111,8 +111,8 @@ export const config = {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 3000,
       system: SYSTEM_PROMPT,
-      tools: [{ type: "web_search_20250305", name: "web_search" }],
-      messages: [{ role: "user", content: `Today is ${dateET}. Current time ET: ${timeET}. ${marketStatus}. ${userContext ? "User preferences: " + userContext : ""} Run 8-10 searches. Return ONLY valid JSON, no markdown, no text outside the JSON.` }],
+            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+            messages: [{ role: "user", content: `Today is ${dateET}. Current time ET: ${timeET}. ${marketStatus}. ${userContext ? "User preferences: " + userContext : ""} Do EXACTLY 3-4 focused web searches total (you have a hard limit of 4): one for the economic calendar and macro events today, one for Bitcoin price plus top crypto movers, one for VIX and major index levels, and optionally one for a specific high-conviction setup. Be efficient and decisive. After searching, output your full analysis as a SINGLE valid JSON object only. No markdown, no code fences, no text before or after. Keep every string on one line with no raw newlines inside string values.` }],
     });
     const text = message.content.filter(b => b.type === "text").map(b => b.text).join("");
             const raw = text.replace(/```json|```/g, "").trim();
