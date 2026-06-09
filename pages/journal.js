@@ -11,11 +11,18 @@ function sbHeaders() {
 
 function num(v) { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, "")); return isNaN(n) ? null : n; }
 
+function fmtDate(s) {
+  if (!s) return "-";
+  try { return new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
+  catch { return s; }
+}
+
 export default function Journal() {
   const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
-  const [form, setForm] = useState({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "" });
+  const [expanded, setExpanded] = useState(null);
+  const [form, setForm] = useState({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "", notes: "" });
   const configured = Boolean(SB_URL && SB_KEY);
 
   const loadTrades = useCallback(async () => {
@@ -75,12 +82,13 @@ export default function Journal() {
       target1: num(form.target1),
       target2: num(form.target2),
       conviction: form.conviction ? parseInt(form.conviction) : null,
+      notes: form.notes || null,
       status: "OPEN"
     };
     try {
       const r = await fetch(SB_URL + "/rest/v1/" + TABLE, { method: "POST", headers: { ...sbHeaders(), "Prefer": "return=representation" }, body: JSON.stringify(row) });
       if (!r.ok) throw new Error("status " + r.status);
-      setForm({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "" });
+      setForm({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "", notes: "" });
       setMsg("Trade logged.");
       loadTrades();
     } catch (e) { setMsg("Could not save: " + e.message); }
@@ -101,6 +109,8 @@ export default function Journal() {
   const C = { bg: "#03070a", card: "#0a1520", border: "rgba(0,255,136,0.15)", green: "#00ff88", red: "#ff3355", text: "#c8d8e8", dim: "#4a6a7a" };
   const box = { background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: 16 };
   const inp = { background: "#060d12", border: "1px solid " + C.border, borderRadius: 6, padding: "8px 10px", color: "#fff", fontSize: 13, width: "100%", boxSizing: "border-box" };
+  const lbl = { fontSize: 11, color: C.dim, marginBottom: 4 };
+  const detailRow = (k, v) => v ? (<div style={{ display: "flex", gap: 8, marginBottom: 4 }}><span style={{ color: C.dim, minWidth: 110, fontSize: 12 }}>{k}</span><span style={{ fontSize: 12 }}>{v}</span></div>) : null;
 
   return (
     <>
@@ -111,7 +121,7 @@ export default function Journal() {
             <div style={{ fontSize: 30, fontWeight: 900, color: C.green, letterSpacing: 3 }}>APEX JOURNAL</div>
             <a href="/" style={{ color: C.dim, fontSize: 13, textDecoration: "none" }}>&larr; Back to APEX</a>
           </div>
-          <div style={{ color: C.dim, fontSize: 13, marginBottom: 20 }}>Paper-trading tracker. Log a crypto trade, then hit Check Prices to mark wins and losses. Synced to your account across devices.</div>
+          <div style={{ color: C.dim, fontSize: 13, marginBottom: 20 }}>Paper-trading tracker. Log a crypto trade with APEX notes, then hit Check Prices to mark wins and losses. Click any trade to see full details. Synced across devices.</div>
           {!configured && <div style={{ ...box, borderColor: C.red, color: C.red, marginBottom: 20 }}>Supabase keys not detected. Make sure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in Vercel and redeploy.</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
             <div style={box}><div style={{ color: C.dim, fontSize: 11 }}>WIN RATE</div><div style={{ fontSize: 26, fontWeight: 800, color: C.green }}>{winRate}%</div><div style={{ color: C.dim, fontSize: 11 }}>{wins}/{closed.length} closed</div></div>
@@ -121,13 +131,14 @@ export default function Journal() {
           <div style={{ ...box, marginBottom: 20 }}>
             <div style={{ fontWeight: 700, marginBottom: 12, color: C.green }}>LOG A TRADE</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 10 }}>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Ticker (e.g. BTC)</div><input style={inp} value={form.ticker} onChange={e => setForm({ ...form, ticker: e.target.value })} /></div>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Direction</div><select style={inp} value={form.direction} onChange={e => setForm({ ...form, direction: e.target.value })}><option>LONG</option><option>SHORT</option></select></div>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Conviction (1-10)</div><input style={inp} value={form.conviction} onChange={e => setForm({ ...form, conviction: e.target.value })} /></div>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Entry price</div><input style={inp} value={form.entry} onChange={e => setForm({ ...form, entry: e.target.value })} /></div>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Stop loss</div><input style={inp} value={form.stopLoss} onChange={e => setForm({ ...form, stopLoss: e.target.value })} /></div>
-              <div><div style={{ fontSize: 11, color: C.dim, marginBottom: 4 }}>Target 1</div><input style={inp} value={form.target1} onChange={e => setForm({ ...form, target1: e.target.value })} /></div>
+              <div><div style={lbl}>Ticker (e.g. BTC)</div><input style={inp} value={form.ticker} onChange={e => setForm({ ...form, ticker: e.target.value })} /></div>
+              <div><div style={lbl}>Direction</div><select style={inp} value={form.direction} onChange={e => setForm({ ...form, direction: e.target.value })}><option>LONG</option><option>SHORT</option></select></div>
+              <div><div style={lbl}>Conviction (1-10)</div><input style={inp} value={form.conviction} onChange={e => setForm({ ...form, conviction: e.target.value })} /></div>
+              <div><div style={lbl}>Entry price</div><input style={inp} value={form.entry} onChange={e => setForm({ ...form, entry: e.target.value })} /></div>
+              <div><div style={lbl}>Stop loss</div><input style={inp} value={form.stopLoss} onChange={e => setForm({ ...form, stopLoss: e.target.value })} /></div>
+              <div><div style={lbl}>Target 1</div><input style={inp} value={form.target1} onChange={e => setForm({ ...form, target1: e.target.value })} /></div>
             </div>
+            <div style={{ marginBottom: 10 }}><div style={lbl}>APEX notes (paste the catalyst, technical setup, and reasoning)</div><textarea style={{ ...inp, minHeight: 70, resize: "vertical", fontFamily: "inherit" }} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
             <button onClick={addTrade} style={{ background: C.green, color: "#000", border: "none", borderRadius: 6, padding: "10px 18px", fontWeight: 800, cursor: "pointer", letterSpacing: 1 }}>+ LOG TRADE</button>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -138,19 +149,37 @@ export default function Journal() {
             {loading ? <div style={{ color: C.dim }}>Loading...</div> : trades.length === 0 ? <div style={{ color: C.dim }}>No trades logged yet. Add one above.</div> :
               trades.map(t => {
                 const sc = t.status === "WIN" ? C.green : t.status === "LOSS" ? C.red : C.dim;
+                const isOpen = expanded === t.id;
                 return (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                    <div>
-                      <span style={{ fontWeight: 800 }}>{t.ticker}</span>
-                      <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>{t.direction} @ {t.entry}</span>
-                      <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>SL {t.stop_loss} / TP {t.target1}</span>
-                      {t.conviction ? <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>conv {t.conviction}</span> : null}
+                  <div key={t.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                    <div onClick={() => setExpanded(isOpen ? null : t.id)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", cursor: "pointer" }}>
+                      <div>
+                        <span style={{ color: C.dim, fontSize: 11, marginRight: 6 }}>{isOpen ? "\u25bc" : "\u25b6"}</span>
+                        <span style={{ fontWeight: 800 }}>{t.ticker}</span>
+                        <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>{t.direction} @ {t.entry}</span>
+                        <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>SL {t.stop_loss} / TP {t.target1}</span>
+                        {t.conviction ? <span style={{ color: C.dim, fontSize: 12, marginLeft: 8 }}>conv {t.conviction}</span> : null}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {t.result_pct != null && <span style={{ color: sc, fontSize: 13 }}>{num(t.result_pct) >= 0 ? "+" : ""}{num(t.result_pct).toFixed(1)}%</span>}
+                        <span style={{ color: sc, fontWeight: 800, fontSize: 13 }}>{t.status}</span>
+                        <span onClick={(e) => { e.stopPropagation(); deleteTrade(t.id); }} style={{ color: C.dim, cursor: "pointer", fontSize: 16 }}>&times;</span>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      {t.result_pct != null && <span style={{ color: sc, fontSize: 13 }}>{num(t.result_pct) >= 0 ? "+" : ""}{num(t.result_pct).toFixed(1)}%</span>}
-                      <span style={{ color: sc, fontWeight: 800, fontSize: 13 }}>{t.status}</span>
-                      <span onClick={() => deleteTrade(t.id)} style={{ color: C.dim, cursor: "pointer", fontSize: 16 }}>&times;</span>
-                    </div>
+                    {isOpen && (
+                      <div style={{ padding: "4px 0 14px 18px", borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+                        {detailRow("Entered", fmtDate(t.logged_at))}
+                        {t.closed_at && detailRow("Closed", fmtDate(t.closed_at))}
+                        {detailRow("Direction", t.direction)}
+                        {detailRow("Entry", t.entry)}
+                        {detailRow("Stop loss", t.stop_loss)}
+                        {detailRow("Target 1", t.target1)}
+                        {detailRow("Target 2", t.target2)}
+                        {detailRow("Conviction", t.conviction)}
+                        {detailRow("Result", t.result_pct != null ? (num(t.result_pct).toFixed(1) + "%") : null)}
+                        {t.notes && (<div style={{ marginTop: 8 }}><div style={{ color: C.dim, fontSize: 12, marginBottom: 4 }}>APEX notes</div><div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", background: "#060d12", border: "1px solid " + C.border, borderRadius: 6, padding: 10 }}>{t.notes}</div></div>)}
+                      </div>
+                    )}
                   </div>
                 );
               })}
