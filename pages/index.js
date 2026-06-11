@@ -576,6 +576,7 @@ export default function Home() {
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setApexData(json);
+      try { const SBU = process.env.NEXT_PUBLIC_SUPABASE_URL, SBK = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; if (SBU && SBK && Array.isArray(json.trades)) { for (const tr of json.trades) { const row = { id: "apex_" + Date.now() + "_" + Math.random().toString(36).slice(2,7), ticker: String(tr.ticker||"").toUpperCase().replace(/[^A-Z0-9]/g,""), asset_class: tr.assetClass || "CRYPTO", direction: tr.direction || "LONG", entry: parseFloat(String(tr.entryZone||tr.currentPrice||"").replace(/[^0-9.]/g,""))||null, stop_loss: parseFloat(String(tr.stopLoss||"").replace(/[^0-9.]/g,""))||null, target1: parseFloat(String(tr.target1||"").replace(/[^0-9.]/g,""))||null, target2: parseFloat(String(tr.target2||"").replace(/[^0-9.]/g,""))||null, conviction: tr.apexConviction || null, notes: [tr.catalyst, tr.technicalSetup, tr.macroAlignment, tr.confluence, tr.apexSummary].filter(Boolean).join(" | ") || null, status: "OPEN" }; if (row.ticker && row.entry) { fetch(SBU + "/rest/v1/journal_trades", { method: "POST", headers: { apikey: SBK, Authorization: "Bearer " + SBK, "Content-Type": "application/json" }, body: JSON.stringify(row) }).catch(function(){}); } } } } catch (autoSaveErr) {}
       setPhase("apex-done");
     } catch (e) {
       setApexError(e.message || "APEX research failed");
