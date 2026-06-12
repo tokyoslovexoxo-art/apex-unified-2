@@ -678,7 +678,7 @@ export default function Home() {
         {/* ── TABS ── */}
         <div style={{ display: "flex", gap: 2, padding: "0 22px", borderBottom: `1px solid ${C.bord2}`, background: "rgba(3,7,10,0.7)" }}>
           {tabs.map(({ id, label }) => (
-            <button key={id} onClick={() => setActiveTab(id)} style={{
+                        <button key={id} onClick={() => id === "journal" ? (window.location.href = "/journal") : setActiveTab(id)} style={{
               background: "none", border: "none",
               padding: "11px 14px",
               fontSize: 12, fontWeight: activeTab === id ? 700 : 400,
