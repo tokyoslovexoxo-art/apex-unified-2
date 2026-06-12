@@ -101,6 +101,14 @@ export default function Journal() {
     } catch (e) { setMsg("Delete failed: " + e.message); }
   };
 
+    const markTrade = async (id, status) => {
+      try {
+        const body = status === "OPEN" ? { status: "OPEN", result_pct: null, closed_at: null } : { status, closed_at: new Date().toISOString() };
+        await fetch(SB_URL + "/rest/v1/" + TABLE + "?id=eq." + id, { method: "PATCH", headers: sbHeaders(), body: JSON.stringify(body) });
+        loadTrades();
+      } catch (e) { setMsg("Could not update: " + e.message); }
+    };
+
   const closed = trades.filter(t => t.status === "WIN" || t.status === "LOSS");
   const wins = closed.filter(t => t.status === "WIN").length;
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
@@ -177,6 +185,7 @@ export default function Journal() {
                         {detailRow("Target 2", t.target2)}
                         {detailRow("Conviction", t.conviction)}
                         {detailRow("Result", t.result_pct != null ? (num(t.result_pct).toFixed(1) + "%") : null)}
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button onClick={() => markTrade(t.id, "WIN")} style={{ background: "transparent", color: C.green, border: "1px solid " + C.green, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✓ Mark Win</button><button onClick={() => markTrade(t.id, "LOSS")} style={{ background: "transparent", color: C.red, border: "1px solid " + C.red, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✗ Mark Loss</button>{(t.status === "WIN" || t.status === "LOSS") && <button onClick={() => markTrade(t.id, "OPEN")} style={{ background: "transparent", color: C.dim, border: "1px solid " + C.dim, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Reset to Open</button>}</div>
                         {t.notes && (<div style={{ marginTop: 8 }}><div style={{ color: C.dim, fontSize: 12, marginBottom: 4 }}>APEX notes</div><div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", background: "#060d12", border: "1px solid " + C.border, borderRadius: 6, padding: 10 }}>{t.notes}</div></div>)}
                       </div>
                     )}
