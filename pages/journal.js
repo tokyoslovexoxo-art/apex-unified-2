@@ -23,6 +23,9 @@ export default function Journal() {
   const [msg, setMsg] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [form, setForm] = useState({ ticker: "", direction: "LONG", entry: "", stopLoss: "", target1: "", target2: "", conviction: "", notes: "" });
+    const [recheckId, setRecheckId] = useState(null);
+  const [recheckResult, setRecheckResult] = useState({});
+  const [recheckLoading, setRecheckLoading] = useState(null);
   const configured = Boolean(SB_URL && SB_KEY);
 
   const loadTrades = useCallback(async () => {
@@ -109,6 +112,21 @@ export default function Journal() {
       } catch (e) { setMsg("Could not update: " + e.message); }
     };
 
+    const recheckTrade = async (t, imageBase64, mediaType) => {
+      setRecheckLoading(t.id); setRecheckResult(p => ({ ...p, [t.id]: null }));
+      try {
+        const res = await fetch("/api/recheck", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageBase64, mediaType, ticker: t.ticker, direction: t.direction, entry: t.entry, stopLoss: t.stop_loss, target: t.target1, notes: t.notes }) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setRecheckResult(p => ({ ...p, [t.id]: data }));
+        const patch = {};
+        if (data.newEntry != null) patch.entry = data.newEntry;
+        if (data.newStop != null) patch.stop_loss = data.newStop;
+        if (Object.keys(patch).length) { await fetch(SB_URL + "/rest/v1/" + TABLE + "?id=eq." + t.id, { method: "PATCH", headers: sbHeaders(), body: JSON.stringify(patch) }); loadTrades(); }
+      } catch (e) { setRecheckResult(p => ({ ...p, [t.id]: { error: e.message } })); }
+      setRecheckLoading(null);
+    };
+
   const closed = trades.filter(t => t.status === "WIN" || t.status === "LOSS");
   const wins = closed.filter(t => t.status === "WIN").length;
   const winRate = closed.length ? Math.round((wins / closed.length) * 100) : 0;
@@ -184,6 +202,19 @@ export default function Journal() {
                         {detailRow("Target 1", t.target1)}
                         {detailRow("Target 2", t.target2)}
                         {detailRow("Conviction", t.conviction)}
+{isOpen && (<div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+<label style={{ display: "inline-block", background: "transparent", color: C.green, border: "1px solid " + C.green, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
+{recheckLoading === t.id ? "Analyzing chart..." : "Re-check chart with APEX"}
+<input type="file" accept="image/*" style={{ display: "none" }} disabled={recheckLoading === t.id} onChange={(e) => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => { recheckTrade(t, reader.result.split(",")[1], f.type || "image/jpeg"); }; reader.readAsDataURL(f); }} />
+  </label>
+{recheckResult[t.id] && !recheckResult[t.id].error && (<div style={{ marginTop: 10, fontSize: 12, color: C.text, background: C.bg, border: "1px solid " + C.border, borderRadius: 8, padding: 10 }}>
+<div style={{ fontWeight: 800, color: recheckResult[t.id].verdict === "EXIT" ? C.red : recheckResult[t.id].verdict === "HOLD" ? C.green : C.yellow, marginBottom: 4 }}>{recheckResult[t.id].verdict} {recheckResult[t.id].confidence ? ("(" + recheckResult[t.id].confidence + "/10)") : ""}</div>
+<div style={{ marginBottom: 4 }}>{recheckResult[t.id].changesSummary}</div>
+<div style={{ color: C.dim, fontSize: 11 }}>{recheckResult[t.id].reasoning}</div>
+<div style={{ color: C.dim, fontSize: 11, marginTop: 4 }}>Trade updated: entry {recheckResult[t.id].newEntry}, stop {recheckResult[t.id].newStop}</div>
+  </div>)}
+{recheckResult[t.id] && recheckResult[t.id].error && (<div style={{ marginTop: 10, fontSize: 12, color: C.red }}>Re-check failed: {recheckResult[t.id].error}</div>)}
+  </div>)}
                         {detailRow("Result", t.result_pct != null ? (num(t.result_pct).toFixed(1) + "%") : null)}
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}><button onClick={() => markTrade(t.id, "WIN")} style={{ background: "transparent", color: C.green, border: "1px solid " + C.green, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✓ Mark Win</button><button onClick={() => markTrade(t.id, "LOSS")} style={{ background: "transparent", color: C.red, border: "1px solid " + C.red, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>✗ Mark Loss</button>{(t.status === "WIN" || t.status === "LOSS") && <button onClick={() => markTrade(t.id, "OPEN")} style={{ background: "transparent", color: C.dim, border: "1px solid " + C.dim, borderRadius: 6, padding: "6px 14px", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Reset to Open</button>}</div>
                         {t.notes && (<div style={{ marginTop: 8 }}><div style={{ color: C.dim, fontSize: 12, marginBottom: 4 }}>APEX notes</div><div style={{ fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap", background: "#060d12", border: "1px solid " + C.border, borderRadius: 6, padding: 10 }}>{t.notes}</div></div>)}
